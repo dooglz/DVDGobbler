@@ -49,7 +49,30 @@ app.get('/mag', function (req, res) {
     }
 })
 
+app.get('/cex', function (req, res) {
+    if (req && req.query && req.query.barcode) {
+        cex(req.query.barcode, (r) => { res.send(r); });
+    } else {
+        res.send({ error: true });
+    }
+})
 
+
+app.get('/zif', function (req, res) {
+    if (req && req.query && req.query.barcode) {
+        ziffit(req.query.barcode, (r) => { res.send(r); });
+    } else {
+        res.send({ error: true });
+    }
+})
+
+app.get('/mom', function (req, res) {
+    if (req && req.query && req.query.barcode) {
+        mom(req.query.barcode, (r) => { res.send(r); });
+    } else {
+        res.send({ error: true });
+    }
+})
 
 
 function newZapCookie(cb) {
@@ -115,8 +138,153 @@ function zap(barcode, callback, guard) {
     });
 }
 
+let cexbrowserlock = false;
+function cex(barcode, callback) {
+    if (cexbrowserlock) {
+        //really really bad spinlock
+        setTimeout(cex, 1000, barcode, callback);
+        return;
+    }
+    cexbrowserlock = true;
+    console.log("cex-ing ", barcode);
+    let scrape = async () => {
+        const browser = await puppeteer.launch({ headless: true });
+        const page = await browser.newPage();
+        await page.goto('https://uk.webuy.com/product-detail/?id='+barcode);
+        await page.waitForSelector('#Acashprice, #showmoreresult');
+        const result = await page.evaluate(() => {
+            let priceEX = document.querySelector('#Aexchprice');
+            let title = document.querySelector('.productNamecustm');
+            let price = document.querySelector('#Acashprice');
+            if (title == null) {
+                return { title: "NOSALE", price: 0 };
+            }
+            return {
+                title: title.innerText.replace(/(\r\n|\n|\r)/gm,""),
+                price: price.innerText,
+                priceEX: priceEX.innerText
+            }
+        });
+        await browser.close();
+        return result;
+    };
 
+    scrape().then(
+        (value) => {
+            console.log(value);
+            cexbrowserlock = false;
+            callback(value);
+        },
+        (err) => {
+            console.error(err);
+            cexbrowserlock = false;
+            callback({ error: true })
+        }
+    );
+}
+
+let mombrowserlock = false;
+function mom(barcode, callback) {
+    if (mombrowserlock) {
+        //really really bad spinlock
+        setTimeout(mom, 1000, barcode, callback);
+        return;
+    }
+    mombrowserlock = true;
+    console.log("mom-ing ", barcode);
+    let scrape = async () => {
+        const browser = await puppeteer.launch({ headless: true });
+        const page = await browser.newPage();
+        await page.goto('https://www.momox.co.uk/offer/'+barcode);
+        await page.waitForSelector('.searchresult-price, .icon-not-found, #noOfferReasonLink');
+        const result = await page.evaluate(() => {
+            let title = document.querySelector('.offer-page-searchresult > div > div > h1');
+            let price = document.querySelector('.searchresult-price');
+            if (price == null) {
+                return { title: "NOSALE", price: 0 };
+            }
+            return {
+                title: title.innerText.replace(/(\r\n|\n|\r)/gm,""),
+                price: price.innerText,
+            }
+        });
+        await browser.close();
+        return result;
+    };
+
+    scrape().then(
+        (value) => {
+            console.log(value);
+            mombrowserlock = false;
+            callback(value);
+        },
+        (err) => {
+            console.error(err);
+            mombrowserlock = false;
+            callback({ error: true })
+        }
+    );
+}
+
+
+
+let ziffitbrowserlock = false;
+function ziffit(barcode, callback) {
+    if (ziffitbrowserlock) {
+        //really really bad spinlock
+        setTimeout(ziffit, 1000, barcode, callback);
+        return;
+    }
+    ziffitbrowserlock = true;
+    console.log("ziffit-ing ", barcode);
+    let scrape = async () => {
+        const browser = await puppeteer.launch({ headless: true });
+        const page = await browser.newPage();
+        await page.goto('https://www.ziffit.com/en-gb/basket');
+        const seltag = '#basket-page-component > div > div.col-md-12.barcode > div > form > div.col-sm-offset-3.col-sm-6 > input';
+        await page.waitFor(seltag);
+        await page.type(seltag, barcode);
+        await (await page.$(seltag)).press('Enter');
+        console.info("Entered Barcode");
+        await page.waitForSelector('#basket-page-component > div > div.col-md-9.tableholder > table > tbody > tr, .alert-danger');
+        const result = await page.evaluate(() => {
+            let title = document.querySelector('#basket-page-component > div > div.col-md-9.tableholder > table > tbody > tr > th:nth-child(1)');
+            let price = document.querySelector('#basket-page-component > div > div.col-md-9.tableholder > table > tbody > tr > th:nth-child(4)');
+            if (title == null) {
+                return { title: "NOSALE", price: 0 };
+            }
+            return {
+                title: title.innerText,
+                price: price.innerText
+            }
+        });
+        await browser.close();
+        return result;
+    };
+
+    scrape().then(
+        (value) => {
+            console.log(value);
+            ziffitbrowserlock = false;
+            callback(value);
+        },
+        (err) => {
+            console.error(err);
+            ziffitbrowserlock = false;
+            callback({ error: true })
+        }
+    );
+}
+
+
+let magbrowserlock = false;
 function magpie(barcode, callback) {
+    if (magbrowserlock) {
+        //really really bad spinlock
+        setTimeout(magpie, 1000, barcode, callback);
+        return;
+    }
+    magbrowserlock = true;
     console.log("magpie-ing ", barcode);
     let scrape = async () => {
         const browser = await puppeteer.launch({ headless: true });
@@ -127,13 +295,16 @@ function magpie(barcode, callback) {
         await (await page.$('#getValSmall')).press('Enter');
         console.info("Entered Barcode");
         await page.waitForNavigation();
-        await page.waitForSelector('#basketareaWrapper > div > div.left > div.row.rowDetails_Media');
+        await page.waitForSelector('#basketareaWrapper > div > div.left > div.row.rowDetails_Media, #lblMessage1');
         const result = await page.evaluate(() => {
-            let title = document.querySelector('#basketareaWrapper > div > div.left > div.row.rowDetails_Media > div.col_Title').innerText;
-            let price = document.querySelector('#basketareaWrapper > div > div.left > div.row.rowDetails_Media > div.col_Price').innerText;
+            let title = document.querySelector('#basketareaWrapper > div > div.left > div.row.rowDetails_Media > div.col_Title');
+            let price = document.querySelector('#basketareaWrapper > div > div.left > div.row.rowDetails_Media > div.col_Price');
+            if (title == null) {
+                return { title: "NOSALE", price: 0 };
+            }
             return {
-                title: title,
-                price: price
+                title: title.innerText,
+                price: price.innerText
             }
         });
         await browser.close();
@@ -143,10 +314,12 @@ function magpie(barcode, callback) {
     scrape().then(
         (value) => {
             console.log(value);
+            magbrowserlock = false;
             callback(value);
         },
         (err) => {
             console.error(err);
+            magbrowserlock = false;
             callback({ error: true })
         }
     );
@@ -190,6 +363,37 @@ function ReadFromGSheet() {
                         if (!o.error) {
                             r.zapperid = o.title;
                             r.zapperprice = o.price;
+                            r.save();
+                        }
+                    });
+                }
+                if (r.barcode && r.cexid === "" && r.cexprice === "") {
+                    console.info("Auto Cex-ing ", r.item, i);
+                    cex(r.barcode, (o) => {
+                        if (!o.error) {
+                            r.cexid = o.title;
+                            r.cexprice = o.price;
+                            r.cexpricevoucher = o.priceEX;
+                            r.save();
+                        }
+                    });
+                }
+                if (r.barcode && r.ziffitid === "" && r.ziffitprice === "") {
+                    console.info("Auto ZIF-ing ", r.item, i);
+                    ziffit(r.barcode, (o) => {
+                        if (!o.error) {
+                            r.ziffitid = o.title;
+                            r.ziffitprice = o.price;
+                            r.save();
+                        }
+                    });
+                }
+                if (r.barcode && r.momoxid === "" && r.momoxprice === "") {
+                    console.info("Auto MOM-ing ", r.item, i);
+                    mom(r.barcode, (o) => {
+                        if (!o.error) {
+                            r.momoxid = o.title;
+                            r.momoxprice = o.price;
                             r.save();
                         }
                     });

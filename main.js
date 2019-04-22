@@ -22,6 +22,18 @@ function Startup() {
         tr.append($('<td>').append(MAG_ID));
         let MAG_Price = $('<span>');
         tr.append($('<td>').append(MAG_Price));
+        let CEX_ID = $('<span>');
+        tr.append($('<td>').append(CEX_ID));
+        let CEX_Price = $('<span>');
+        tr.append($('<td>').append(CEX_Price));
+        let ZIF_ID = $('<span>');
+        tr.append($('<td>').append(ZIF_ID));
+        let ZIF_Price = $('<span>');
+        tr.append($('<td>').append(ZIF_Price));
+        let MOM_ID = $('<span>');
+        tr.append($('<td>').append(MOM_ID));
+        let MOM_Price = $('<span>');
+        tr.append($('<td>').append(MOM_Price));
 
         let ZAPBtn = $('<button type="button" id="addBtn1">ZAP</button>');
         ZAPBtn.click(() => {
@@ -53,45 +65,91 @@ function Startup() {
                 }
             });
         });
+        let CEXBtn = $('<button type="button" id="addBtn2">CEX</button>');
+        CEXBtn.click(() => {
+            console.log("yo:", ipt.val());
+            CEXBtn.attr("disabled", true);
+            cexReq(ipt.val(), (res) => {
+                CEXBtn.attr("disabled", false);
+                if (res.error) {
+                    CEX_ID.text("error");
+                    CEX_Price.text("error");
+                } else {
+                    CEX_ID.text(res.title);
+                    CEX_Price.text(res.price + " ex:" + res.priceEX);
+                }
+            });
+        });
+
+        let ZIFBtn = $('<button type="button" id="addBtn2">ZIF</button>');
+        ZIFBtn.click(() => {
+            console.log("yo:", ipt.val());
+            ZIFBtn.attr("disabled", true);
+            zifReq(ipt.val(), (res) => {
+                ZIFBtn.attr("disabled", false);
+                if (res.error) {
+                    ZIF_ID.text("error");
+                    ZIF_Price.text("error");
+                } else {
+                    ZIF_ID.text(res.title);
+                    ZIF_Price.text(res.price);
+                }
+            });
+        });
+        let MOMBtn = $('<button type="button" id="addBtn2">MOM</button>');
+        MOMBtn.click(() => {
+            console.log("yo:", ipt.val());
+            MOMBtn.attr("disabled", true);
+            momReq(ipt.val(), (res) => {
+                MOMBtn.attr("disabled", false);
+                if (res.error) {
+                    MOM_ID.text("error");
+                    MOM_Price.text("error");
+                } else {
+                    MOM_ID.text(res.title);
+                    MOM_Price.text(res.price);
+                }
+            });
+        });
         let Buttons = $('<td>');
         Buttons.append(ZAPBtn);
         Buttons.append(MAGBtn);
+        Buttons.append(CEXBtn);
+        Buttons.append(ZIFBtn);
+        Buttons.append(MOMBtn);
         tr.append(Buttons);
         $('#maintable tr:last').after(tr);
     });
 }
 
+function Req(endpoint, barcode, handler) {
+    var settings = {
+        "async": true,
+        "crossDomain": true,
+        "url": endpoint,
+        "method": "GET",
+        "data": "barcode=" + barcode
+    };
 
+    $.ajax(settings).done(function (response) {
+        console.log(response);
+        handler(response);
+    });
+}
 
 function zapReq(barcode, handler) {
-    var settings = {
-        "async": true,
-        "crossDomain": true,
-        "url": "/zap",
-        "method": "GET",
-        "data": "barcode=" + barcode
-    };
-
-    $.ajax(settings).done(function (response) {
-        console.log(response);
-        handler(response);
-    });
+    return Req("/zap", barcode, handler);
 }
-
-
 function magReq(barcode, handler) {
-    var settings = {
-        "async": true,
-        "crossDomain": true,
-        "url": "/mag",
-        "method": "GET",
-        "data": "barcode=" + barcode
-    };
-
-    $.ajax(settings).done(function (response) {
-        console.log(response);
-        handler(response);
-    });
+    return Req("/mag", barcode, handler);
 }
-
+function cexReq(barcode, handler) {
+    return Req("/cex", barcode, handler);
+}
+function zifReq(barcode, handler) {
+    return Req("/zif", barcode, handler);
+}
+function momReq(barcode, handler) {
+    return Req("/mom", barcode, handler);
+}
 $(document).ready(Startup());
