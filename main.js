@@ -1,53 +1,95 @@
 
-function Startup(){
+function Startup() {
 
-    $("#zapcookies").click(()=>{
-        $.get( "./zapCookies");
-    });
-
- $("#addBtn").click(()=>{
-    let tr = $("<tr></tr>");
-    let ipt = $('<input type="text" name="barcode" value=5035822416499>"');
-    tr.append($('<td>').append(ipt));
-
-    let result1 =  $('<span>');
-    tr.append($('<td>').append(result1));
-    let result2 =  $('<span>');
-    tr.append($('<td>').append(result2));
-    let result3 =  $('<span>');
-    tr.append($('<td>').append(result3));
-
-    let btn = $('<button type="button" id="addBtn">Check Price</button>');
-    btn.click(()=>{
-        console.log("yo:",ipt.val());
-        zapReq(ipt.val(), (res)=>{
-            result1.text(res.type);
-            result2.text(res.title);
-            result3.text(res.price);
+    $("#zapcookies").click(() => {
+        $.get("./zapCookies", (data) => {
+            $("#zapcookspan").text(data);
         });
     });
-    tr.append($('<td>').append(btn));
 
-    let newrow = $('#maintable tr:last').after(tr);
- });
+    $("#addBtn").click(() => {
+        let tr = $("<tr></tr>");
+        let ipt = $('<input type="text" name="barcode" value=7321900180207>"');
+        tr.append($('<td>').append(ipt));
+
+        let ZAP_ID = $('<span>');
+        tr.append($('<td>').append(ZAP_ID));
+        let ZAP_Price = $('<span>');
+        tr.append($('<td>').append(ZAP_Price));
+        let MAG_ID = $('<span>');
+        tr.append($('<td>').append(MAG_ID));
+        let MAG_Price = $('<span>');
+        tr.append($('<td>').append(MAG_Price));
+
+        let ZAPBtn = $('<button type="button" id="addBtn1">ZAP</button>');
+        ZAPBtn.click(() => {
+            console.log("yo:", ipt.val());
+            ZAPBtn.attr("disabled", true);
+            zapReq(ipt.val(), (res) => {
+                ZAPBtn.attr("disabled", false);
+                if (res.error) {
+                    ZAP_ID.text("error");
+                    ZAP_Price.text("error");
+                } else {
+                    ZAP_ID.text(res.title + " " + res.type);
+                    MAG_Price.text(res.price);
+                }
+            });
+        });
+        let MAGBtn = $('<button type="button" id="addBtn2">MAG</button>');
+        MAGBtn.click(() => {
+            console.log("yo:", ipt.val());
+            MAGBtn.attr("disabled", true);
+            magReq(ipt.val(), (res) => {
+                MAGBtn.attr("disabled", false);
+                if (res.error) { 
+                    MAG_ID.text("error");
+                    MAG_Price.text("error");
+                } else {
+                    MAG_ID.text(res.title);
+                    MAG_Price.text(res.price);
+                }
+            });
+        });
+        let Buttons = $('<td>');
+        Buttons.append(ZAPBtn);
+        Buttons.append(MAGBtn);
+        tr.append(Buttons);
+        $('#maintable tr:last').after(tr);
+    });
 }
 
-// "origin": "https://zapper.co.uk",
 
 
-function zapReq(barcode, handler){
+function zapReq(barcode, handler) {
     var settings = {
         "async": true,
         "crossDomain": true,
         "url": "/zap",
         "method": "GET",
-        "data": "barcode=5035822416499"
+        "data": "barcode=" + barcode
     };
-          
+
     $.ajax(settings).done(function (response) {
         console.log(response);
         handler(response);
-      });
+    });
 }
 
-$( document ).ready(Startup());
+
+function magReq(barcode, handler) {
+    var settings = {
+        "async": true,
+        "crossDomain": true,
+        "url": "/mag",
+        "method": "GET",
+        "data": "barcode=" + barcode
+    };
+
+    $.ajax(settings).done(function (response) {
+        console.log(response);
+        handler(response);
+    });
+}
+
+$(document).ready(Startup());

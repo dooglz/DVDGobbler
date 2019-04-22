@@ -2,13 +2,13 @@ const express = require('express');
 var http = require("https");
 var request = require("request");
 const app = express();
+const puppeteer = require('puppeteer');
 const port = 3000;
 
 app.use("/", express.static(__dirname));
 
 app.get('/zapCookies', function (req, res) {
-    newZapCookie();
-    res.send('ok');
+    newZapCookie((c) => { res.send(c); });
 });
 
 
@@ -16,9 +16,18 @@ app.get('/zap', function (req, res) {
     if (req && req.query && req.query.barcode) {
         zap(req.query.barcode, (r) => { res.send(r); })
     } else {
-        res.send('ERR')
+        res.send({error:true});
     }
 })
+
+app.get('/mag', function (req, res) {
+    if (req && req.query && req.query.barcode) {
+     magpie(req.query.barcode, (r) => { res.send(r); });
+    } else {
+        res.send({error:true});
+    }
+})
+
 
 app.listen(port, () => console.log(`Example app listening on port ${port}!`))
 
@@ -26,7 +35,7 @@ app.listen(port, () => console.log(`Example app listening on port ${port}!`))
 newZapCookie();
 let zapcookies = "";
 
-function newZapCookie() {
+function newZapCookie(cb) {
     console.log("Getting New zap cookies");
     request('https://zapper.co.uk/', function (error, response, body) {
         if (!error && response.statusCode == 200) {
@@ -36,14 +45,15 @@ function newZapCookie() {
             let zap_dr = str.match(/(zap_dr=\w+);/gm);
             zapcookies = sessid[0] + zap_dr[0];
             console.log("ZapCookies: ", zapcookies);
+            if (cb) { cb(zapcookies); }
         } else {
             console.error("WOMP")
         }
     });
 }
 
-function zap(barcode, callback,guard) {
-    console.log("Zapping ", barcode)
+function zap(barcode, callback, guard) {
+    console.log("Zapping", barcode)
     let cooks = zapcookies;
     var options = {
         method: 'POST',
@@ -53,7 +63,6 @@ function zap(barcode, callback,guard) {
         {
             'cache-control': 'no-cache',
             Connection: 'keep-alive',
-            'content-length': '67',
             Host: 'zapper.co.uk',
             'Cache-Control': 'no-cache',
             dnt: '1',
@@ -72,10 +81,14 @@ function zap(barcode, callback,guard) {
     };
 
     request(options, function (error, response, body) {
-        if (error) throw new Error(error);
+        if (error) {
+            console.error("ZAP ERROR",error);
+            callback({ error: true });
+            return;
+        }
         console.log(body);
         let ser = JSON.parse(body);
-        if(ser.ValuationDisplayMessage!=="Added to list" && guard === undefined){
+        if (ser.ValuationDisplayMessage !== "Added to list" && guard === undefined) {
             console.info("Assuming Garbage Result, going again");
             zap(barcode, callback, true);
             return;
@@ -83,4 +96,41 @@ function zap(barcode, callback,guard) {
         let obj = { price: ser.Offer, type: ser.Media, title: ser.Title }
         callback(obj);
     });
+}
+
+
+function magpie(barcode, callback, guard) {
+    console.log("magpie-ing ", barcode);
+    let scrape = async () => {
+        const browser = await puppeteer.launch({ headless: true });
+        const page = await browser.newPage();
+        await page.goto('https://www.musicmagpie.co.uk/start-selling/basket-media/');
+        await page.waitFor('#txtBarcode');
+        await page.type('#txtBarcode', barcode); 
+        await (await page.$('#getValSmall')).press('Enter');
+        console.info("Entered Barcode");
+        await page.waitForNavigation();
+        await page.waitForSelector('#basketareaWrapper > div > div.left > div.row.rowDetails_Media');
+        const result = await page.evaluate(() => {
+            let title = document.querySelector('#basketareaWrapper > div > div.left > div.row.rowDetails_Media > div.col_Title').innerText;
+            let price = document.querySelector('#basketareaWrapper > div > div.left > div.row.rowDetails_Media > div.col_Price').innerText;
+            return {
+                title:title,
+                price:price
+            }
+        });
+        await browser.close();
+        return result;
+    };
+
+    scrape().then(
+        (value) => {
+            console.log(value);
+            callback(value);
+        },
+        (err) => {
+            console.error(err);
+            callback({ error: true })
+        }
+    );
 }
