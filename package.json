@@ -10,6 +10,9 @@
   "license": "ISC",
   "dependencies": {
     "express": "^4.16.4",
+    "express-fileupload": "^1.1.4",
+    "google-spreadsheet": "^2.0.7",
+    "googleapis": "^27.0.0",
     "puppeteer": "^1.14.0",
     "request": "^2.88.0"
   }

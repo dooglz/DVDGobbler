@@ -4,36 +4,53 @@ var request = require("request");
 const app = express();
 const puppeteer = require('puppeteer');
 const port = 3000;
+const fs = require('fs');
+
+let creds = false;
+function getGCreds() {
+    fs.readFile('./credentials.json', (err, content) => {
+        if (err) {
+            console.error('Error loading client secret file:', err);
+            return;
+        }
+        creds = JSON.parse(content);
+        console.log('Creds loaded from file', creds.project_id);
+    });
+}
+getGCreds();
+
 
 app.use("/", express.static(__dirname));
 
 app.get('/zapCookies', function (req, res) {
     newZapCookie((c) => { res.send(c); });
 });
+app.get('/gsheets', function (req, res) {
+    ReadFromGSheet();
+    res.send("OK");
+});
 
+let zapcookies = "";
 
 app.get('/zap', function (req, res) {
+    if (zapcookies === "") { newZapCookie(); }
     if (req && req.query && req.query.barcode) {
         zap(req.query.barcode, (r) => { res.send(r); })
     } else {
-        res.send({error:true});
+        res.send({ error: true });
     }
 })
 
 app.get('/mag', function (req, res) {
     if (req && req.query && req.query.barcode) {
-     magpie(req.query.barcode, (r) => { res.send(r); });
+        magpie(req.query.barcode, (r) => { res.send(r); });
     } else {
-        res.send({error:true});
+        res.send({ error: true });
     }
 })
 
 
-app.listen(port, () => console.log(`Example app listening on port ${port}!`))
 
-
-newZapCookie();
-let zapcookies = "";
 
 function newZapCookie(cb) {
     console.log("Getting New zap cookies");
@@ -82,7 +99,7 @@ function zap(barcode, callback, guard) {
 
     request(options, function (error, response, body) {
         if (error) {
-            console.error("ZAP ERROR",error);
+            console.error("ZAP ERROR", error);
             callback({ error: true });
             return;
         }
@@ -99,14 +116,14 @@ function zap(barcode, callback, guard) {
 }
 
 
-function magpie(barcode, callback, guard) {
+function magpie(barcode, callback) {
     console.log("magpie-ing ", barcode);
     let scrape = async () => {
         const browser = await puppeteer.launch({ headless: true });
         const page = await browser.newPage();
         await page.goto('https://www.musicmagpie.co.uk/start-selling/basket-media/');
         await page.waitFor('#txtBarcode');
-        await page.type('#txtBarcode', barcode); 
+        await page.type('#txtBarcode', barcode);
         await (await page.$('#getValSmall')).press('Enter');
         console.info("Entered Barcode");
         await page.waitForNavigation();
@@ -115,8 +132,8 @@ function magpie(barcode, callback, guard) {
             let title = document.querySelector('#basketareaWrapper > div > div.left > div.row.rowDetails_Media > div.col_Title').innerText;
             let price = document.querySelector('#basketareaWrapper > div > div.left > div.row.rowDetails_Media > div.col_Price').innerText;
             return {
-                title:title,
-                price:price
+                title: title,
+                price: price
             }
         });
         await browser.close();
@@ -134,3 +151,55 @@ function magpie(barcode, callback, guard) {
         }
     );
 }
+
+
+function ReadFromGSheet() {
+    if (!creds) { return; }
+    const GoogleSpreadsheet = require('google-spreadsheet');
+    console.log("Attempting to open Gsheet");
+    // Create a document object using the ID of the spreadsheet - obtained from its URL.
+    const doc = new GoogleSpreadsheet('1EUJp4EwW3FQ6_vPHtmiR4v6wtNS-vtYP7y46LZyQUak');
+    console.log("Attempting to Auth");
+    // Authenticate with the Google Spreadsheets API.
+    doc.useServiceAccountAuth(creds, function (err) {
+        if (err) {
+            console.error("GAuth Error"), err;
+            return;
+        }
+        // Get all of the rows from the spreadsheet.
+        doc.getRows(1, function (err, rows) {
+            if (err) {
+                console.error("getRows Error"), err;
+                return;
+            }
+            console.info("Found rows:", rows.length);
+            rows.forEach((r, i) => {
+                if (r.barcode && r.musicmagpieid === "" && r.musicmagpieprice === "") {
+                    console.info("Auto Magpie-ing ", r.item, i);
+                    magpie(r.barcode, (o) => {
+                        if (!o.error) {
+                            r.musicmagpieid = o.title;
+                            r.musicmagpieprice = o.price;
+                            r.save();
+                        }
+                    });
+                }
+                if (r.barcode && r.zapperid === "" && r.zapperprice === "") {
+                    console.info("Auto Zap-ing ", r.item, i);
+                    zap(r.barcode, (o) => {
+                        if (!o.error) {
+                            r.zapperid = o.title;
+                            r.zapperprice = o.price;
+                            r.save();
+                        }
+                    });
+                }
+            });
+        });
+    });
+}
+
+app.listen(port, () => console.log(`Example app listening on port ${port}!`))
+
+
+

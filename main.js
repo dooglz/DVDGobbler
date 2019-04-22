@@ -1,10 +1,12 @@
 
 function Startup() {
-
     $("#zapcookies").click(() => {
         $.get("./zapCookies", (data) => {
             $("#zapcookspan").text(data);
         });
+    });
+    $("#sheetbtn").click(() => {
+        $.get("./gsheets");
     });
 
     $("#addBtn").click(() => {
@@ -32,7 +34,7 @@ function Startup() {
                     ZAP_Price.text("error");
                 } else {
                     ZAP_ID.text(res.title + " " + res.type);
-                    MAG_Price.text(res.price);
+                    ZAP_Price.text(res.price);
                 }
             });
         });
@@ -42,7 +44,7 @@ function Startup() {
             MAGBtn.attr("disabled", true);
             magReq(ipt.val(), (res) => {
                 MAGBtn.attr("disabled", false);
-                if (res.error) { 
+                if (res.error) {
                     MAG_ID.text("error");
                     MAG_Price.text("error");
                 } else {
