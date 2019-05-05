@@ -198,7 +198,7 @@ function mom(barcode, callback) {
         await page.goto('https://www.momox.co.uk/offer/'+barcode);
         await page.waitForSelector('.searchresult-price, .icon-not-found, #noOfferReasonLink');
         const result = await page.evaluate(() => {
-            let title = document.querySelector('.offer-page-searchresult > div > div > h1');
+            let title = document.querySelector('.offer-page-searchresult > div > div > div.product-title > h1');
             let price = document.querySelector('.searchresult-price');
             if (price == null) {
                 return { title: "NOSALE", price: 0 };
