@@ -127,12 +127,20 @@ function zap(barcode, callback, guard) {
             return;
         }
         console.log(body);
-        let ser = JSON.parse(body);
+        let ser = {};
+        try {
+            ser = JSON.parse(body);
+        } catch (e) {
+            console.error("Zap result, non json!");
+            return;
+        }
         if (ser.ValuationDisplayMessage !== "Added to list" && guard === undefined) {
             console.info("Assuming Garbage Result, going again");
             zap(barcode, callback, true);
             return;
         }
+        if (ser.Offer <= 0) { ser.Offer = 0; }
+        if (ser.Title == "") { ser.Title = "NOSALE"; }
         let obj = { price: ser.Offer, type: ser.Media, title: ser.Title }
         callback(obj);
     });
@@ -146,21 +154,46 @@ function cex(barcode, callback) {
         return;
     }
     cexbrowserlock = true;
-    console.log("cex-ing ", barcode);
+    console.log("cex-ing ", '(' + barcode + ')');
     let scrape = async () => {
         const browser = await puppeteer.launch({ headless: true });
         const page = await browser.newPage();
-        await page.goto('https://uk.webuy.com/product-detail/?id='+barcode);
-        await page.waitForSelector('#Acashprice, #showmoreresult');
+        await page.goto('https://uk.webuy.com/product-detail/?id=' + barcode);
+        await page.waitForSelector('.productNamecustm, #showmoreresult');
+        //page.on('console', msg => console.log('PAGE LOG:', msg.text()));
+        //await page.waitForNavigation({ waitUntil: 'domcontentloaded' })
+        await page.waitFor(200);
+        try {
+            //productNamecustm could wipe at any time, even inbetween calls, hence trycatch
+            const hasname = await page.evaluate(() => document.querySelector(".productNamecustm"));
+            const text = await page.evaluate(() => document.querySelector(".productNamecustm").innerText);
+            //wait for the name to be "something"
+            await page.waitForFunction('document.querySelector(".productNamecustm").innerText != ""');
+            // await page.waitForFunction('document.querySelector(".productNamecustm").innerText != "\n"');   
+            //get name, 
+            const itemname = await page.evaluate(() => document.querySelector(".productNamecustm").innerText);
+
+            //check if blank, if so we're about to be bumped to homepage
+            const text2filtered = itemname.replace(/(\r\n|\n|\r|\s{2,})/gm, "");
+            if (text2filtered === "") {
+                await browser.close();
+                return { title: "NOSALE", price: 0, priceEX: 0 };
+            }
+        } catch (e) {
+            await browser.close();
+            return { title: "NOSALE", price: 0, priceEX: 0 };
+        }
+        //const text3 = await page.evaluate(() => document.querySelector("#showmoreresult"));
+        //const text4 = await page.evaluate(() => window.location.href);
         const result = await page.evaluate(() => {
             let priceEX = document.querySelector('#Aexchprice');
             let title = document.querySelector('.productNamecustm');
             let price = document.querySelector('#Acashprice');
             if (title == null) {
-                return { title: "NOSALE", price: 0 };
+                return { title: "NOSALE", price: 0, priceEX: 0 };
             }
             return {
-                title: title.innerText.replace(/(\r\n|\n|\r)/gm,""),
+                title: title.firstChild.nodeValue.replace(/(\r\n|\n|\r)/gm, "").replace(/\s\s+/g, ' '),
                 price: price.innerText,
                 priceEX: priceEX.innerText
             }
@@ -195,16 +228,16 @@ function mom(barcode, callback) {
     let scrape = async () => {
         const browser = await puppeteer.launch({ headless: true });
         const page = await browser.newPage();
-        await page.goto('https://www.momox.co.uk/offer/'+barcode);
+        await page.goto('https://www.momox.co.uk/offer/' + barcode);
         await page.waitForSelector('.searchresult-price, .icon-not-found, #noOfferReasonLink');
         const result = await page.evaluate(() => {
             let title = document.querySelector('.offer-page-searchresult > div > div > div.product-title > h1');
             let price = document.querySelector('.searchresult-price');
-            if (price == null) {
+            if (price == null || title == null) {
                 return { title: "NOSALE", price: 0 };
             }
             return {
-                title: title.innerText.replace(/(\r\n|\n|\r)/gm,""),
+                title: title.innerText.replace(/(\r\n|\n|\r)/gm, ""),
                 price: price.innerText,
             }
         });
@@ -356,7 +389,7 @@ function ReadFromGSheet() {
                             r.save();
                         }
                     });
-                }
+                }/*
                 if (r.barcode && r.zapperid === "" && r.zapperprice === "") {
                     console.info("Auto Zap-ing ", r.item, i);
                     zap(r.barcode, (o) => {
@@ -366,7 +399,7 @@ function ReadFromGSheet() {
                             r.save();
                         }
                     });
-                }
+                }*/
                 if (r.barcode && r.cexid === "" && r.cexprice === "") {
                     console.info("Auto Cex-ing ", r.item, i);
                     cex(r.barcode, (o) => {
